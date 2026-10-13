@@ -33,7 +33,11 @@
    ```powershell
    git clone https://github.com/Grizzcul/dth-digital-human.git dth
    cd dth
+   git config --local user.name "Grizz"
+   git config --local user.email "185069331+Grizzcul@users.noreply.github.com"
    ```
+
+   后两行只设置这个仓库的提交身份，使用 GitHub 的 noreply 地址；不用于账号登录。克隆私有仓库时若出现 GitHub 登录提示，请用 `Grizzcul` 账号登录授权。
 
 4. 在项目目录创建只属于这台电脑的 Python 环境。Demo 仅使用标准库，不需要 pip 安装 PyTorch、LivePortrait 或其他依赖：
 
@@ -73,6 +77,8 @@ git push
 ```
 
 第一次远端关联和推送由当前电脑完成；之后两台电脑连接同一个仓库、使用 `main` 分支。提交只保存在本机，推送才上传到 GitHub。电脑 A 结束后推送，电脑 B 开始前拉取。
+
+只按上述流程推送 `main`。不要用 `git push --mirror` 上传本机内部快照；本机 Codex 辅助记录和真实密钥不属于共享项目内容。
 
 如果 `pull --ff-only` 报错，或发现两台电脑分别修改过，请先保留两边的修改再处理合并；不要用 `reset --hard` 或强制推送覆盖。
 
