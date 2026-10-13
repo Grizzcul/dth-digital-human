@@ -10,55 +10,61 @@
   <script src="script.js" defer></script>
 </head>
 <body>
-  <main class="card">
+  <!-- 【新增：抽屉】id 让 JS 能找到卡片；展开时会给卡片添加 history-open 类。 -->
+  <main class="card" id="assistant-card">
     <header>
       <!-- 【可以试着改 1】修改 Grace，消息里的数字人名字也会跟着改变。 -->
       <p class="eyebrow" id="assistant-name">Grace</p>
       <h1>你好，我在这里。</h1>
-      <!-- 【可以试着改 2】这里是页面上的引导文字。 -->
       <p class="introduction">输入一句话，我们开始聊聊吧。</p>
     </header>
 
-    <!-- 这个容器把“数字人展示”和“聊天区域”放在一起。 -->
+    <!-- 【新增：抽屉】这是普通按钮；type="button" 表示它不负责发送消息。 -->
+    <!-- aria-controls 指向它控制的区域；aria-expanded 说明是否已展开。 -->
+    <button class="history-toggle" id="history-toggle" type="button"
+      aria-controls="history-panel" aria-expanded="false"
+      aria-label="展开对话记录" title="展开对话记录">›</button>
+
     <div class="interaction-layout">
-      <section class="stage" aria-label="数字人展示">
-        <p class="status"><span class="status-dot"></span><span id="status-text">待机中</span></p>
+      <!-- 数字人和输入框都在这个区域里，不会随记录一起隐藏。 -->
+      <section class="assistant-main" aria-label="数字人和输入">
+        <div class="stage">
+          <p class="status"><span class="status-dot"></span><span id="status-text">待机中</span></p>
 
-        <!-- 小人的结构保持不变，CSS 负责把这些元素画出来。 -->
-        <div class="avatar" id="avatar" aria-hidden="true">
-          <div class="hair"></div>
-          <div class="face">
-            <div class="eye eye-left"></div>
-            <div class="eye eye-right"></div>
-            <div class="cheek cheek-left"></div>
-            <div class="cheek cheek-right"></div>
-            <div class="mouth"></div>
+          <div class="avatar" id="avatar" aria-hidden="true">
+            <div class="hair"></div>
+            <div class="face">
+              <div class="eye eye-left"></div>
+              <div class="eye eye-right"></div>
+              <div class="cheek cheek-left"></div>
+              <div class="cheek cheek-right"></div>
+              <div class="mouth"></div>
+            </div>
+            <div class="neck"></div>
+            <div class="body"></div>
           </div>
-          <div class="neck"></div>
-          <div class="body"></div>
+          <div class="shadow" aria-hidden="true"></div>
         </div>
-        <div class="shadow" aria-hidden="true"></div>
-      </section>
 
-      <section class="chat-panel" aria-label="文字对话">
-        <h2>聊一聊</h2>
-
-        <!-- 这里开始是空的，script.js 会一条一条添加消息。 -->
-        <!-- role="log"、aria-live 帮助屏幕阅读器读取新消息。 -->
-        <div class="conversation" id="conversation" role="log" aria-live="polite" aria-label="对话记录"></div>
-
-        <!-- form 把输入框和发送按钮组成一次“提交”。按 Enter 也会提交。 -->
+        <!-- 输入框移到了记录区域外面，所以收起记录后仍能发送消息。 -->
         <form class="composer" id="chat-form">
-          <!-- label 说明输入框的用途；for 对应输入框的 id。 -->
           <label class="input-label" for="message-input">你想说什么？</label>
           <div class="input-row">
-            <!-- 【可以试着改 3】placeholder 是空输入框的提示；maxlength 限制字数。 -->
+            <!-- 【可以试着改 2】placeholder 是提示；maxlength 限制字数。 -->
             <input id="message-input" type="text" placeholder="试试：你好 / 你是谁" maxlength="500" autocomplete="off">
             <button type="submit">发送</button>
           </div>
         </form>
-        <p class="hint">Enter 发送 · 刷新页面会清空对话</p>
+        <p class="hint">Enter 发送 · 右侧箭头查看对话记录</p>
       </section>
+
+      <!-- 【新增：抽屉】hidden 表示初次打开页面时隐藏。它不会删除内部消息。 -->
+      <aside class="history-panel" id="history-panel" aria-label="对话记录面板" hidden>
+        <h2>对话记录</h2>
+        <div class="conversation" id="conversation" role="log" aria-live="polite"
+          aria-label="对话记录" tabindex="0"></div>
+        <p class="hint">收起后记录仍保留，刷新页面会清空。</p>
+      </aside>
     </div>
   </main>
 </body>

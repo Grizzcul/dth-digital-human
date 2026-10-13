@@ -15,9 +15,11 @@ body {
 }
 
 .card {
+  /* 【新增：抽屉】箭头用 absolute 定位，这张卡片就是它的定位基准。 */
+  position: relative;
   width: 100%;
-  /* 【可以试着改 1】调整整体卡片的最大宽度。 */
-  max-width: 900px;
+  /* 【可以试着改 1】收起时的卡片宽度；展开宽度在 .card.history-open 中。 */
+  max-width: 520px;
   padding: 36px 28px;
   text-align: center;
   background: #fffef9;
@@ -46,6 +48,7 @@ h1 {
 }
 
 .stage {
+  text-align: center;
   position: relative;
   height: 340px;
   margin-top: 0;
@@ -179,21 +182,44 @@ h1 {
   opacity: 1;
 }
 
-/* ===== 新增：数字人和对话区域的布局 ===== */
+/* ===== 新增：默认只展示数字人和输入框 ===== */
 .interaction-layout {
+  position: relative;
   display: grid;
-  /* 左边展示形象；右边使用剩余宽度展示对话。 */
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   margin-top: 28px;
 }
 
-.chat-panel {
+.assistant-main {
   min-width: 0;
   text-align: left;
 }
 
-.chat-panel h2 {
+/* 展开时增加卡片宽度，并把记录作为第二列放在右边。 */
+.card.history-open {
+  /* 【抽屉可改 1】展开后的最大宽度。 */
+  max-width: 900px;
+}
+
+.card.history-open .interaction-layout {
+  /* 【抽屉可改 2】340px 是右侧记录面板的宽度。 */
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.history-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  text-align: left;
+}
+
+/* 这里必须明确隐藏，否则上面的 display: flex 可能覆盖 hidden 的默认样式。 */
+.history-panel[hidden] {
+  display: none;
+}
+
+.history-panel h2 {
   margin: 0 0 12px;
   font-size: 15px;
   font-weight: 600;
@@ -201,7 +227,7 @@ h1 {
 
 .conversation {
   /* 【可以试着改 2】调整对话区域的高度。超出时出现滚动条。 */
-  height: 216px;
+  height: 380px;
   overflow-y: auto;
   padding: 12px;
   background: #f6f7f1;
@@ -295,6 +321,27 @@ input:focus-visible, button:focus-visible {
   outline-offset: 2px;
 }
 
+/* ===== 新增：把小箭头嵌在卡片右边框中间 ===== */
+.history-toggle {
+  position: absolute;
+  /* 【抽屉可改 3】right 控制箭头离右边框的距离；top 控制上下位置。 */
+  right: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  width: 28px;
+  height: 60px;
+  padding: 0;
+  border: 1px solid #cdd8c9;
+  border-radius: 10px;
+  background: #fffef9;
+  color: #354f43;
+  font-size: 28px;
+  line-height: 1;
+  box-shadow: 0 3px 12px #263e3810;
+}
+
+.history-toggle:hover { background: #eaf0e7; }
 
 .hint {
   margin: 8px 0 0;
@@ -302,13 +349,34 @@ input:focus-visible, button:focus-visible {
   font-size: 11px;
 }
 
-/* 屏幕较窄时，两个区域上下排列。680px 是布局切换的宽度。 */
+/* 小屏幕放不下两列时，记录面板覆盖数字人区域，输入框仍在下方可用。 */
 @media (max-width: 680px) {
   body { padding: 16px; }
   .card { padding: 28px 20px; }
-  .interaction-layout { grid-template-columns: 1fr; }
+  .card.history-open .interaction-layout { grid-template-columns: minmax(0, 1fr); }
   .stage { height: 290px; }
   .avatar { margin-top: 16px; }
+
+  .history-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 3;
+    width: 100%;
+    /* 和上面的 .stage 高度相同，面板就不会盖住输入框。 */
+    height: 290px;
+    padding: 16px;
+    background: #fffef9;
+    border: 1px solid #e5e9df;
+    border-radius: 22px;
+    box-shadow: 0 8px 24px #263e3815;
+  }
+
+  .history-panel .conversation {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+  }
 }
 
 /* 中间稍微上移，最后回到原位，就形成一次轻微的呼吸动作。 */

@@ -6,6 +6,46 @@ const conversation = document.getElementById("conversation");
 const chatForm = document.getElementById("chat-form");
 const messageInput = document.getElementById("message-input");
 
+// ===== 新增：找到右侧记录抽屉和箭头按钮 =====
+const assistantCard = document.getElementById("assistant-card");
+const historyPanel = document.getElementById("history-panel");
+const historyToggle = document.getElementById("history-toggle");
+
+// isOpen 为 true 时展开，为 false 时收起。
+// 这是控制展开状态的唯一函数，之后修改开关行为时，从这里开始。
+function setHistoryOpen(isOpen) {
+  // hidden 是 HTML 元素自带的属性。! 表示取反：展开时不隐藏。
+  historyPanel.hidden = !isOpen;
+
+  // classList.toggle(类名, 布尔值)：true 添加类，false 移除类。
+  // CSS 根据 history-open 类决定卡片宽度和右侧布局。
+  assistantCard.classList.toggle("history-open", isOpen);
+
+  // 展开时箭头朝左，提示收起；收起时朝右，提示展开。
+  historyToggle.textContent = isOpen ? "‹" : "›";
+  historyToggle.setAttribute("aria-expanded", String(isOpen));
+  const label = isOpen ? "收起对话记录" : "展开对话记录";
+  historyToggle.setAttribute("aria-label", label);
+  historyToggle.title = label;
+
+  // 隐藏期间也在添加消息；展开后再滚动，才能正确定位最新消息。
+  if (isOpen) {
+    conversation.scrollTop = conversation.scrollHeight;
+  }
+}
+
+historyToggle.addEventListener("click", () => {
+  // 当前 hidden 为 true（已隐藏），下次就应该展开；反之收起。
+  setHistoryOpen(historyPanel.hidden);
+});
+
+// 可选的键盘操作：展开后按 Escape 收起，并把焦点放回箭头。
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !historyPanel.hidden) {
+    setHistoryOpen(false);
+    historyToggle.focus();
+  }
+});
 
 // 从 HTML 读取你设置的名字，避免在两个文件里重复修改。
 const assistantName = document.getElementById("assistant-name").textContent.trim();
@@ -36,8 +76,10 @@ function addMessage(role, text) {
   messageRow.append(sender, bubble);
   conversation.appendChild(messageRow);
 
-  // 每添加一条消息，滚动到底部，让最新的消息可见。
-  conversation.scrollTop = conversation.scrollHeight;
+  // 【新增：抽屉】仅在记录可见时滚动；隐藏时继续添加并保留消息。
+  if (!historyPanel.hidden) {
+    conversation.scrollTop = conversation.scrollHeight;
+  }
 }
 
 // ===== 3. 根据输入生成“规则回复” =====
