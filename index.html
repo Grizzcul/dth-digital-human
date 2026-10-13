@@ -10,8 +10,8 @@
   <script src="script.js" defer></script>
 </head>
 <body>
-  <!-- 【新增：抽屉】id 让 JS 能找到卡片；展开时会给卡片添加 history-open 类。 -->
-  <main class="card" id="assistant-card">
+  <!-- 中央卡片只包含数字人和输入框，展开记录不会改变它的布局。 -->
+  <main class="card">
     <header>
       <!-- 【可以试着改 1】修改 Grace，消息里的数字人名字也会跟着改变。 -->
       <p class="eyebrow" id="assistant-name">Grace</p>
@@ -19,18 +19,10 @@
       <p class="introduction">输入一句话，我们开始聊聊吧。</p>
     </header>
 
-    <!-- 【新增：抽屉】这是普通按钮；type="button" 表示它不负责发送消息。 -->
-    <!-- aria-controls 指向它控制的区域；aria-expanded 说明是否已展开。 -->
-    <button class="history-toggle" id="history-toggle" type="button"
-      aria-controls="history-panel" aria-expanded="false"
-      aria-label="展开对话记录" title="展开对话记录">›</button>
-
     <div class="interaction-layout">
-      <!-- 数字人和输入框都在这个区域里，不会随记录一起隐藏。 -->
       <section class="assistant-main" aria-label="数字人和输入">
         <div class="stage">
           <p class="status"><span class="status-dot"></span><span id="status-text">待机中</span></p>
-
           <div class="avatar" id="avatar" aria-hidden="true">
             <div class="hair"></div>
             <div class="face">
@@ -46,7 +38,6 @@
           <div class="shadow" aria-hidden="true"></div>
         </div>
 
-        <!-- 输入框移到了记录区域外面，所以收起记录后仍能发送消息。 -->
         <form class="composer" id="chat-form">
           <label class="input-label" for="message-input">你想说什么？</label>
           <div class="input-row">
@@ -55,17 +46,24 @@
             <button type="submit">发送</button>
           </div>
         </form>
-        <p class="hint">Enter 发送 · 右侧箭头查看对话记录</p>
+        <p class="hint">Enter 发送 · 页面最右侧箭头查看对话记录</p>
       </section>
-
-      <!-- 【新增：抽屉】hidden 表示初次打开页面时隐藏。它不会删除内部消息。 -->
-      <aside class="history-panel" id="history-panel" aria-label="对话记录面板" hidden>
-        <h2>对话记录</h2>
-        <div class="conversation" id="conversation" role="log" aria-live="polite"
-          aria-label="对话记录" tabindex="0"></div>
-        <p class="hint">收起后记录仍保留，刷新页面会清空。</p>
-      </aside>
     </div>
   </main>
+
+  <!-- 【修改：页面边缘抽屉】箭头和面板移到了 main 外面，与中央卡片平级。 -->
+  <!-- CSS 的 position: fixed 把它们固定在浏览器内容区域的右边缘。 -->
+  <!-- type="button" 表示箭头只负责切换，不发送消息。 -->
+  <button class="history-toggle" id="history-toggle" type="button"
+    aria-controls="history-panel" aria-expanded="false"
+    aria-label="展开对话记录" title="展开对话记录">‹</button>
+
+  <!-- hidden 表示默认隐藏；收起时保留内部消息。 -->
+  <aside class="history-panel" id="history-panel" aria-label="对话记录面板" hidden>
+    <h2>对话记录</h2>
+    <div class="conversation" id="conversation" role="log" aria-live="polite"
+      aria-label="对话记录" tabindex="0"></div>
+    <p class="hint">收起后记录仍保留，刷新页面会清空。</p>
+  </aside>
 </body>
 </html>

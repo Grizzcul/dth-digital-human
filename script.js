@@ -7,7 +7,6 @@ const chatForm = document.getElementById("chat-form");
 const messageInput = document.getElementById("message-input");
 
 // ===== 新增：找到右侧记录抽屉和箭头按钮 =====
-const assistantCard = document.getElementById("assistant-card");
 const historyPanel = document.getElementById("history-panel");
 const historyToggle = document.getElementById("history-toggle");
 
@@ -17,12 +16,9 @@ function setHistoryOpen(isOpen) {
   // hidden 是 HTML 元素自带的属性。! 表示取反：展开时不隐藏。
   historyPanel.hidden = !isOpen;
 
-  // classList.toggle(类名, 布尔值)：true 添加类，false 移除类。
-  // CSS 根据 history-open 类决定卡片宽度和右侧布局。
-  assistantCard.classList.toggle("history-open", isOpen);
-
-  // 展开时箭头朝左，提示收起；收起时朝右，提示展开。
-  historyToggle.textContent = isOpen ? "‹" : "›";
+  // 【修改：页面边缘抽屉】不再给中央卡片添加类，也不改变卡片宽度。
+  // 收起时箭头朝左，提示打开右边的面板；展开时朝右，提示收回。
+  historyToggle.textContent = isOpen ? "›" : "‹";
   historyToggle.setAttribute("aria-expanded", String(isOpen));
   const label = isOpen ? "收起对话记录" : "展开对话记录";
   historyToggle.setAttribute("aria-label", label);
