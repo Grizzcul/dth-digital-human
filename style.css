@@ -48,7 +48,8 @@ h1 {
 .stage {
   text-align: center;
   position: relative;
-  height: 340px;
+  /* 【图片可改 1】整个展示区域的高度。 */
+  height: 440px;
   margin-top: 0;
   overflow: hidden;
   background: #eaf0e7;
@@ -71,113 +72,32 @@ h1 {
   background: #7b9c79;
 }
 
-/* relative 是小人的定位基准；脸、眼睛等在它里面使用 absolute 定位。 */
+/* ===== 修改：显示已经抠掉背景的视频，动作来自视频本身 ===== */
 .avatar {
-  position: relative;
-  width: 180px;
-  height: 208px;
-  margin: 36px auto 0;
-  /* 自动反复播放呼吸动画，完全由浏览器完成。 */
-  animation: breathe 4s ease-in-out infinite;
+  width: calc(100% - 32px);
+  /* 【图片可改 2】人物显示区域的高度，图片会按比例放进这里。 */
+  height: 380px;
+  margin: 12px auto 0;
+  /* 删除原来的整张图片上下浮动，避免与视频中的真实动作叠加。 */
 }
 
-.hair {
-  position: absolute;
-  top: 0;
-  left: 29px;
-  width: 122px;
-  height: 126px;
-  border-radius: 62px 62px 42px 42px;
-  background: #354c43;
+.avatar-media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* contain：完整显示视频或备用图片，保持原来的宽高比例。 */
+  object-fit: contain;
+  /* drop-shadow 沿透明视频的人物轮廓投影，而不是给整个矩形画阴影。 */
+  filter: drop-shadow(0 5px 8px #263e3820);
+  transition: filter 0.35s ease;
 }
 
-.face {
-  position: absolute;
-  z-index: 2;
-  top: 22px;
-  left: 35px;
-  width: 110px;
-  height: 107px;
-  border-radius: 40px 40px 49px 49px;
-  background: #f5d7bd;
-}
+/* display: block 不应覆盖 hidden，否则视频和备用图片会同时显示。 */
+.avatar-media[hidden] { display: none; }
 
-.eye {
-  position: absolute;
-  top: 39px;
-  width: 8px;
-  height: 11px;
-  border-radius: 50%;
-  background: #354c43;
-  animation: blink 4.5s infinite;
-}
-
-.eye-left { left: 28px; }
-.eye-right { right: 28px; }
-
-.cheek {
-  position: absolute;
-  top: 58px;
-  width: 18px;
-  height: 9px;
-  border-radius: 50%;
-  background: #e9ad99;
-  opacity: 0.5;
-  transition: opacity 0.3s;
-}
-
-.cheek-left { left: 15px; }
-.cheek-right { right: 15px; }
-
-.mouth {
-  position: absolute;
-  top: 65px;
-  left: 44px;
-  width: 22px;
-  height: 8px;
-  border-bottom: 3px solid #a16f59;
-  border-radius: 0 0 12px 12px;
-  transition: all 0.3s;
-}
-
-.neck {
-  position: absolute;
-  top: 118px;
-  left: 75px;
-  width: 30px;
-  height: 29px;
-  background: #e7bfa0;
-}
-
-.body {
-  position: absolute;
-  top: 139px;
-  left: 14px;
-  width: 152px;
-  height: 65px;
-  border-radius: 60px 60px 20px 20px;
-  background: #83a18b;
-  border-bottom: 7px solid #71927a;
-}
-
-.shadow {
-  width: 130px;
-  height: 12px;
-  margin: 0 auto;
-  background: #263e3815;
-  border-radius: 50%;
-}
-
-/* JavaScript 添加 greeting 类时，这两条规则把表情变成更明显的微笑。 */
-.avatar.greeting .mouth {
-  left: 38px;
-  width: 34px;
-  height: 17px;
-  border-radius: 0 0 24px 24px;
-}
-
-.avatar.greeting .cheek {
-  opacity: 1;
+/* 回应时只改变轻微轮廓光，不再整体缩放人物。 */
+.avatar.greeting .avatar-media {
+  filter: drop-shadow(0 0 12px #7b9c7990);
 }
 
 /* 中央卡片只有一个内容区域，不再随抽屉展开增加第二列。 */
@@ -271,6 +191,56 @@ h1 {
 
 .composer { margin-top: 14px; }
 
+/* ===== 新增：模型开关，真正的开关是 HTML 中的 checkbox ===== */
+.model-controls { margin-bottom: 14px; }
+
+.model-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* 透明的原生输入仍能用鼠标和键盘操作；外观由旁边的轨道显示。 */
+.model-toggle input {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+}
+
+.switch-track {
+  width: 44px;
+  height: 24px;
+  flex: none;
+  padding: 3px;
+  border-radius: 20px;
+  background: #bdc9bf;
+  transition: background 0.2s;
+}
+
+.switch-track::after {
+  content: "";
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fffef9;
+  transition: transform 0.2s;
+}
+
+/* checked 是勾选状态；勾选后轨道变绿，小圆点向右移动。 */
+.model-toggle input:checked + .switch-track { background: #354f43; }
+.model-toggle input:checked + .switch-track::after { transform: translateX(20px); }
+.model-toggle input:focus-visible + .switch-track { outline: 3px solid #b7ca9e; outline-offset: 2px; }
+.model-toggle input:disabled + .switch-track { opacity: 0.6; cursor: wait; }
+
 .input-label {
   display: block;
   margin-bottom: 7px;
@@ -309,7 +279,21 @@ button {
   transition: background 0.2s;
 }
 
-button:hover { background: #466552; }
+button:hover:not(:disabled) { background: #466552; }
+
+/* 等待后端时，JS 设置 disabled；CSS 只负责显示不可点击的外观。 */
+button:disabled { opacity: 0.6; cursor: wait; }
+
+.connection-message {
+  margin: 8px 0 0;
+  color: #a34436;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* 没有错误文字时不占空间，保持原来的卡片布局。 */
+.connection-message:empty { display: none; }
 
 input:focus-visible, button:focus-visible {
   outline: 3px solid #b7ca9e;
@@ -351,29 +335,12 @@ input:focus-visible, button:focus-visible {
 @media (max-width: 680px) {
   body { padding: 16px; }
   .card { padding: 28px 20px; }
-  .stage { height: 290px; }
-  .avatar { margin-top: 16px; }
-}
-
-/* 中间稍微上移，最后回到原位，就形成一次轻微的呼吸动作。 */
-@keyframes breathe {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-
-/* 大部分时间眼睛睁着，在动画结束前短暂变扁，模拟眨眼。 */
-@keyframes blink {
-  0%, 94%, 100% { transform: scaleY(1); }
-  97% { transform: scaleY(0.1); }
+  .stage { height: 360px; }
+  .avatar { height: 300px; margin-top: 8px; }
 }
 
 /* 用户在系统中选择减少动画时，尊重这个设置。 */
 @media (prefers-reduced-motion: reduce) {
-  .avatar, .eye { animation: none; }
-  .mouth, .cheek, button { transition: none; }
+  .avatar-media, button, .switch-track, .switch-track::after { transition: none; }
+  /* JavaScript 同时暂停自动播放，让人物停在睁眼画面。 */
 }
-
-
-
-
-

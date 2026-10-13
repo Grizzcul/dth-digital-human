@@ -1,0 +1,13 @@
+# Git 内统一保存文本换行，避免两台电脑之间产生整份文件的假改动。
+* text=auto
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+# PowerShell 在 Windows 使用 CRLF；UTF-8 BOM 保留以支持中文注释。
+*.ps1 text eol=crlf
+*.png binary
+*.mp4 binary
+*.webm binary

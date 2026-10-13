@@ -1,0 +1,39 @@
+# 基于官方 requirements_base.txt，只配置当前需要的人像模式。
+# 官方 lmdb 旧版本在 Python 3.12 / Windows 上需要编译；源码的人像流程未使用它。
+# 下面使用 headless 版 OpenCV：处理图片和视频，界面交给浏览器，不安装桌面 GUI。
+numpy==1.26.4
+pyyaml==6.0.1
+opencv-python-headless==4.10.0.84
+scipy==1.13.1
+imageio==2.34.2
+tqdm==4.66.4
+rich==13.7.1
+ffmpeg-python==0.2.0
+onnx==1.16.1
+scikit-image==0.24.0
+albumentations==1.4.10
+# 与上面的旧版图像处理接口匹配，避免自动拉入接口不同的新版 albucore。
+albucore==0.0.12
+tomli==2.2.1
+matplotlib==3.9.0
+imageio-ffmpeg==0.5.1
+tyro==0.8.5
+gradio==5.1.0
+# Gradio 5.1 使用旧的网页模板接口；新版 Starlette 已更改该接口。
+fastapi==0.115.6
+starlette==0.41.3
+pykalman==0.9.7
+pillow==10.4.0
+
+# 人脸检测运行库：替换官方较旧的版本，匹配 CUDA 12 / cuDNN 9 环境。
+onnxruntime-gpu==1.23.2
+
+# 下载官方模型；固定在仍兼容 Gradio 5.1 的版本系列。
+huggingface-hub==0.36.0
+
+# 网页表单数据校验库；避免新版本与旧版 Gradio 的 schema 接口差异。
+pydantic==2.10.6
+
+# PyTorch 单独从官方 CUDA 索引安装：
+# torch==2.8.0+cu128，torchvision==0.23.0+cu128。
+# 这份清单只配置人像模式，不安装动物模式使用的 X-Pose 编译组件。

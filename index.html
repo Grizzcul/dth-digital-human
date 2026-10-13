@@ -23,30 +23,40 @@
       <section class="assistant-main" aria-label="数字人和输入">
         <div class="stage">
           <p class="status"><span class="status-dot"></span><span id="status-text">待机中</span></p>
-          <div class="avatar" id="avatar" aria-hidden="true">
-            <div class="hair"></div>
-            <div class="face">
-              <div class="eye eye-left"></div>
-              <div class="eye eye-right"></div>
-              <div class="cheek cheek-left"></div>
-              <div class="cheek cheek-right"></div>
-              <div class="mouth"></div>
-            </div>
-            <div class="neck"></div>
-            <div class="body"></div>
+          <!-- 【修改：透明视频】这个容器保持人物的显示尺寸，里面播放真正连续的动作。 -->
+          <div class="avatar" id="avatar">
+            <!-- WebM 保存透明背景；poster 是尚未加载视频时显示的同一人物第一帧。 -->
+            <!-- muted 静音，playsinline 保持在页面内播放，preload 提前加载短视频。 -->
+            <!-- 不写 loop：JavaScript 会在每次播放后停留一会儿，让眨眼间隔更自然。 -->
+            <video class="avatar-media" id="avatar-video" src="png/avatar-blink.webm"
+              poster="png/avatar-idle.png" muted playsinline preload="auto"
+              aria-label="数字人的自然眨眼动画"></video>
+            <!-- 视频格式不支持或加载失败时，改为显示这张抠好的静态图。 -->
+            <img class="avatar-media" id="avatar-fallback" src="png/avatar-idle.png"
+              alt="数字人助手的半身肖像" hidden>
           </div>
-          <div class="shadow" aria-hidden="true"></div>
         </div>
 
         <form class="composer" id="chat-form">
+          <!-- 【新增：模型开关】不写 checked，所以每次打开页面默认不调用模型。 -->
+          <div class="model-controls">
+            <label class="model-toggle">
+              <input id="model-toggle" type="checkbox" role="switch">
+              <span class="switch-track" aria-hidden="true"></span>
+              <span>模型回答</span>
+            </label>
+          </div>
           <label class="input-label" for="message-input">你想说什么？</label>
           <div class="input-row">
             <!-- 【可以试着改 2】placeholder 是提示；maxlength 限制字数。 -->
-            <input id="message-input" type="text" placeholder="试试：你好 / 你是谁" maxlength="500" autocomplete="off">
-            <button type="submit">发送</button>
+            <input id="message-input" type="text" placeholder="今天有什么要分享的？" maxlength="500" autocomplete="off">
+            <!-- id 让 JS 在等待 Python 回复时禁用发送按钮，避免重复请求。 -->
+            <button id="send-button" type="submit">发送</button>
           </div>
         </form>
-        <p class="hint">Enter 发送 · 页面最右侧箭头查看对话记录</p>
+        <p class="hint">Enter 发送 · 页面右侧箭头查看对话</p>
+        <!-- 正常时为空；连接失败时在输入框下方提示，抽屉收起也能看到。 -->
+        <p class="connection-message" id="connection-message" role="status"></p>
       </section>
     </div>
   </main>

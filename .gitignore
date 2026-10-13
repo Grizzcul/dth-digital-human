@@ -1,0 +1,18 @@
+# 本地视频制作工具：环境、官方源码和下载缓存不进入网页项目的代码历史。
+# 我们自己编写的说明、依赖清单和启动脚本仍可以交给 Git 管理。
+/tools/liveportrait/.venv/
+/tools/liveportrait/source/
+/tools/liveportrait/bin/
+/tools/liveportrait/cache/
+/tools/liveportrait/logs/
+# 人像视频抠图模型是下载数据，处理脚本仍交给 Git 管理。
+/tools/liveportrait/matting/*.torchscript
+# Python 自动生成的缓存可以重新生成，不需要保存。
+__pycache__/
+*.pyc
+
+# 每台电脑独有的密钥、Python 环境与绝对路径快捷方式，不上传 GitHub。
+/local_config.py
+/.venv/
+/*.lnk
+/.launcher*
