@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <!-- 让页面在手机和电脑上都按实际屏幕宽度显示。 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的数字人</title>
+  <!-- HTML 定义结构；这两行分别连接另外两个文件。 -->
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <main class="card">
+    <header>
+      <!-- 【可以试着改 1】修改 Grace，消息里的数字人名字也会跟着改变。 -->
+      <p class="eyebrow" id="assistant-name">Grace</p>
+      <h1>你好，我在这里。</h1>
+      <!-- 【可以试着改 2】这里是页面上的引导文字。 -->
+      <p class="introduction">输入一句话，我们开始聊聊吧。</p>
+    </header>
+
+    <!-- 这个容器把“数字人展示”和“聊天区域”放在一起。 -->
+    <div class="interaction-layout">
+      <section class="stage" aria-label="数字人展示">
+        <p class="status"><span class="status-dot"></span><span id="status-text">待机中</span></p>
+
+        <!-- 小人的结构保持不变，CSS 负责把这些元素画出来。 -->
+        <div class="avatar" id="avatar" aria-hidden="true">
+          <div class="hair"></div>
+          <div class="face">
+            <div class="eye eye-left"></div>
+            <div class="eye eye-right"></div>
+            <div class="cheek cheek-left"></div>
+            <div class="cheek cheek-right"></div>
+            <div class="mouth"></div>
+          </div>
+          <div class="neck"></div>
+          <div class="body"></div>
+        </div>
+        <div class="shadow" aria-hidden="true"></div>
+      </section>
+
+      <section class="chat-panel" aria-label="文字对话">
+        <h2>聊一聊</h2>
+
+        <!-- 这里开始是空的，script.js 会一条一条添加消息。 -->
+        <!-- role="log"、aria-live 帮助屏幕阅读器读取新消息。 -->
+        <div class="conversation" id="conversation" role="log" aria-live="polite" aria-label="对话记录"></div>
+
+        <!-- form 把输入框和发送按钮组成一次“提交”。按 Enter 也会提交。 -->
+        <form class="composer" id="chat-form">
+          <!-- label 说明输入框的用途；for 对应输入框的 id。 -->
+          <label class="input-label" for="message-input">你想说什么？</label>
+          <div class="input-row">
+            <!-- 【可以试着改 3】placeholder 是空输入框的提示；maxlength 限制字数。 -->
+            <input id="message-input" type="text" placeholder="试试：你好 / 你是谁" maxlength="500" autocomplete="off">
+            <button type="submit">发送</button>
+          </div>
+        </form>
+        <p class="hint">Enter 发送 · 刷新页面会清空对话</p>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
