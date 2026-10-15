@@ -13,7 +13,6 @@ import torch
 
 # 根据脚本的位置找到项目，不要求你先 cd 到某个目录。
 TOOL_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = TOOL_ROOT.parents[1]
 FFMPEG = TOOL_ROOT / "bin" / "ffmpeg.exe"
 FFPROBE = TOOL_ROOT / "bin" / "ffprobe.exe"
 MODEL = TOOL_ROOT / "matting" / "rvm_mobilenetv3_fp32.torchscript"
@@ -21,9 +20,10 @@ MODEL = TOOL_ROOT / "matting" / "rvm_mobilenetv3_fp32.torchscript"
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=PROJECT_ROOT / "png/avatar.mp4")
-    parser.add_argument("--output", type=Path, default=PROJECT_ROOT / "png/avatar-blink.webm")
-    parser.add_argument("--poster", type=Path, default=PROJECT_ROOT / "png/avatar-idle.png")
+    # 明确指定输入和输出，不再默认使用某个角色或旧文件夹路径。
+    parser.add_argument("--input", type=Path, required=True, help="原始动作视频路径")
+    parser.add_argument("--output", type=Path, required=True, help="透明 WebM 输出路径")
+    parser.add_argument("--poster", type=Path, required=True, help="透明第一帧 PNG 输出路径")
     # 只融合结尾的睁眼画面，眨眼过程直接保留视频原来的连续画面。
     parser.add_argument("--seam-seconds", type=float, default=0.3)
     args = parser.parse_args()

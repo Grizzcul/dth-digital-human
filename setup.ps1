@@ -3,9 +3,6 @@ $ErrorActionPreference = 'Stop'
 $taskRoot = $PSScriptRoot
 $taskPython = Join-Path $taskRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $taskPython)) {
-    $taskPython = Join-Path $taskRoot 'tools\liveportrait\.venv\Scripts\python.exe'
-}
-if (-not (Test-Path -LiteralPath $taskPython)) {
     throw '请先安装 Python，并在项目目录执行：py -3 -m venv --without-pip .venv'
 }
 

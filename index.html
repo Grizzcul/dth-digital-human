@@ -13,8 +13,8 @@
   <!-- 中央卡片只包含数字人和输入框，展开记录不会改变它的布局。 -->
   <main class="card">
     <header>
-      <!-- 【可以试着改 1】修改 Grace，消息里的数字人名字也会跟着改变。 -->
-      <p class="eyebrow" id="assistant-name">Grace</p>
+      <!-- 名字由 script.js 顶部的角色配置填写，不必在 HTML 中重复修改。 -->
+      <p class="eyebrow" id="assistant-name"></p>
       <h1>你好，我在这里。</h1>
       <p class="introduction">输入一句话，我们开始聊聊吧。</p>
     </header>
@@ -23,19 +23,23 @@
       <section class="assistant-main" aria-label="数字人和输入">
         <div class="stage">
           <p class="status"><span class="status-dot"></span><span id="status-text">待机中</span></p>
-          <!-- 【修改：透明视频】这个容器保持人物的显示尺寸，里面播放真正连续的动作。 -->
+          <!-- 通用角色容器：既可以展示静态图片，也可以播放动作视频。 -->
           <div class="avatar" id="avatar">
-            <!-- WebM 保存透明背景；poster 是尚未加载视频时显示的同一人物第一帧。 -->
-            <!-- muted 静音，playsinline 保持在页面内播放，preload 提前加载短视频。 -->
-            <!-- 不写 loop：JavaScript 会在每次播放后停留一会儿，让眨眼间隔更自然。 -->
-            <video class="avatar-media" id="avatar-video" src="png/avatar-blink.webm"
-              poster="png/avatar-idle.png" muted playsinline preload="auto"
-              aria-label="数字人的自然眨眼动画"></video>
-            <!-- 视频格式不支持或加载失败时，改为显示这张抠好的静态图。 -->
-            <img class="avatar-media" id="avatar-fallback" src="png/avatar-idle.png"
-              alt="数字人助手的半身肖像" hidden>
+            <!-- 素材地址由 JS 配置填写；初始隐藏，不加载任何旧角色的视频。 -->
+            <!-- 不写 loop：JavaScript 会在每次播放后随机等待一会儿。 -->
+            <video class="avatar-media" id="avatar-video"
+              muted playsinline preload="none" hidden
+              aria-label="数字人的动作动画"></video>
+            <!-- 没有视频的角色显示图片；视频失败时也改为显示这张配套图片。 -->
+            <img class="avatar-media" id="avatar-fallback"
+              alt="数字人角色图片" hidden>
           </div>
         </div>
+
+        <section class="reply-panel" aria-label="当前回答">
+          <p class="reply-label">当前回答</p>
+          <p class="reply-text" id="reply-text" aria-live="off"></p>
+        </section>
 
         <form class="composer" id="chat-form">
           <!-- 【新增：模型开关】不写 checked，所以每次打开页面默认不调用模型。 -->
@@ -52,9 +56,10 @@
             <input id="message-input" type="text" placeholder="今天有什么要分享的？" maxlength="500" autocomplete="off">
             <!-- id 让 JS 在等待 Python 回复时禁用发送按钮，避免重复请求。 -->
             <button id="send-button" type="submit">发送</button>
+            <button id="stop-button" class="stop-button" type="button" hidden>停止回答</button>
           </div>
         </form>
-        <p class="hint">Enter 发送 · 页面右侧箭头查看对话</p>
+        <p class="hint">Enter 发送 · 回答实时显示 · 右侧箭头查看完整记录</p>
         <!-- 正常时为空；连接失败时在输入框下方提示，抽屉收起也能看到。 -->
         <p class="connection-message" id="connection-message" role="status"></p>
       </section>
@@ -71,9 +76,11 @@
   <!-- hidden 表示默认隐藏；收起时保留内部消息。 -->
   <aside class="history-panel" id="history-panel" aria-label="对话记录面板" hidden>
     <h2>对话记录</h2>
+    <!-- 清除本地会话编号，下次模型消息创建新会话；不删除 Dify 云端记录。 -->
+    <button type="button" class="new-conversation" id="new-conversation">开始新对话</button>
     <div class="conversation" id="conversation" role="log" aria-live="polite"
       aria-label="对话记录" tabindex="0"></div>
-    <p class="hint">收起后记录仍保留，刷新页面会清空。</p>
+    <p class="hint">刷新后可继续同一段模型会话；历史消息暂不自动恢复。</p>
   </aside>
 </body>
 </html>

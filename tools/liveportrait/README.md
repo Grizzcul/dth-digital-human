@@ -45,7 +45,7 @@ http://127.0.0.1:8890
 
 ## 第一次制作眨眼视频
 
-1. 在源素材的 Image 标签上传 `D:\AI\dth\png\avatar.png`。
+1. 在源素材的 Image 标签上传 `D:\AI\dth\png\Liz\liz.png`（或其他角色的原始图片）。
 2. 在 Driving Video 标签上传你录制的 3～5 秒眨眼视频；头、嘴巴和肩膀尽量保持不动。
 3. 保持 relative motion、paste-back 和 stitching 开启。
 4. 在 Animation Options 内，将 animation region 选为 eyes。
@@ -105,28 +105,22 @@ eyes 限制传递的动作参数，不保证眼睛以外所有输出像素完全
 | --- | --- |
 | `prepare-avatar.py` | 带中文注释的离线处理脚本：读取视频、逐帧抠背景、融合尾部、导出透明素材 |
 | `matting/rvm_mobilenetv3_fp32.torchscript` | 官方已经导出的抠图模型，复用本目录的 PyTorch |
-| 项目 `png/avatar-blink.webm` | 透明眨眼视频，供 HTML 的 video 元素播放 |
-| 项目 `png/avatar-idle.png` | 同一视频的透明第一帧，用作加载期间的 poster 和加载失败的备用画面 |
+| 项目 `png/Liz/liz-blink.webm` | 透明眨眼视频，供网页的 video 元素播放 |
+| 项目 `png/Liz/liz-idle.png` | 同一视频的透明第一帧，用作加载期间的 poster 和加载失败的备用画面 |
 
 抠图原理：模型给每个像素预测透明度 alpha。0 是背景、1 是人物，发丝边缘保留中间值。模型保留上一帧的状态，减少逐帧单独抠图产生的闪烁。普通 MP4 / H.264 不保存这种透明度，所以导出带 alpha 的 WebM / VP9。
 
-本次处理使用原始 `D:\AI\dth\png\avatar.mp4`，视频流83帧、30帧/秒，输出时长约2.77秒。原始 MP4 的音频未带入眨眼素材。结尾0.3秒在睁眼状态下融合回第一帧，降低重新播放时的跳动；眨眼本身保留原视频的连续画面。
+此前 Grace 使用原始 `D:\AI\dth\png\Grace\avatar.mp4`，视频流83帧、30帧/秒，输出时长约2.77秒。原始 MP4 的音频未带入眨眼素材。结尾0.3秒在睁眼状态下融合回第一帧，降低重新播放时的跳动；眨眼本身保留原视频的连续画面。
 
-第一次运行的默认命令（默认输出存在时会拒绝覆盖）：
-
-```powershell
-& "D:\AI\dth\tools\liveportrait\.venv\Scripts\python.exe" -X utf8 "D:\AI\dth\tools\liveportrait\prepare-avatar.py"
-```
-
-以后换视频，可以使用新文件名生成第二版，先比较效果：
+脚本需要明确指定输入视频、输出视频和配套图片，已有输出会拒绝覆盖。以 Liz 制作第二版为例：
 
 ```powershell
-& "D:\AI\dth\tools\liveportrait\.venv\Scripts\python.exe" -X utf8 "D:\AI\dth\tools\liveportrait\prepare-avatar.py" --input "D:\AI\dth\png\avatar.mp4" --output "D:\AI\dth\png\avatar-blink-v2.webm" --poster "D:\AI\dth\png\avatar-idle-v2.png"
+& "D:\AI\dth\tools\liveportrait\.venv\Scripts\python.exe" -X utf8 "D:\AI\dth\tools\liveportrait\prepare-avatar.py" --input "D:\AI\dth\png\Liz\liz-motion.mp4" --output "D:\AI\dth\png\Liz\liz-blink-v2.webm" --poster "D:\AI\dth\png\Liz\liz-idle-v2.png"
 ```
 
 脚本面向短的固定帧率 MP4，处理时使用已有 GPU；运行结束后模型进程退出。默认尾部融合适合本次结尾已经睁眼的素材；换成结尾闭眼或动作较大的视频时，先调整素材或用 `--seam-seconds 0` 关闭融合，以免产生重影。
 
-确认新素材满意后，在项目 `index.html` 中更换 video 的 src、poster，以及备用 img 的 src。显示高度看 `style.css` 的 `.avatar`；播放后的随机等待看 `script.js` 的 `VIDEO_WAIT_MIN` 和 `VIDEO_WAIT_MAX`。页面不会运行 Python 或抠图模型。
+确认新素材满意后，在 `script.js` 顶部的角色配置中更换 `image` 和 `video` 路径。新增素材后重启后端，再刷新网页。显示高度看 `style.css` 的 `.avatar`；播放后的随机等待看 `script.js` 的 `VIDEO_WAIT_MIN` 和 `VIDEO_WAIT_MAX`。页面不会运行抠图模型。
 
 已检查输出83帧均保留透明度；背景角落透明、衣服区域保留，首尾在展示背景上的平均差异约0.009/255。JavaScript 的播放、等待、后台暂停、减少动画设置、备用静态图及聊天抽屉逻辑检查通过。尚未自动验证 Edge 中该本地文件页面的实际渲染，需刷新页面查看观感。发丝边缘是模型估计，可能略柔和。
 

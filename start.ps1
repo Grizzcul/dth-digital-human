@@ -3,11 +3,8 @@ $ErrorActionPreference = 'Stop'
 $Host.UI.RawUI.WindowTitle = '我的数字人 - 后端（Ctrl+C 停止）'
 
 # $PSScriptRoot 是本文件所在目录，双击启动时不会依赖当前工作目录。
-# 新电脑使用项目自己的轻量环境；这台电脑原有的环境也继续兼容。
+# 网页后端只使用项目自己的轻量环境，与离线视频制作环境分开。
 $taskPythonPath = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
-if (-not (Test-Path -LiteralPath $taskPythonPath)) {
-    $taskPythonPath = Join-Path $PSScriptRoot 'tools\liveportrait\.venv\Scripts\python.exe'
-}
 $taskServerPath = Join-Path $PSScriptRoot 'server.py'
 
 try {

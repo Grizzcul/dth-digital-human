@@ -139,6 +139,9 @@ h1 {
   font-weight: 600;
 }
 
+/* 新对话按钮留在记录抽屉内，不挤占人物和输入框的空间。 */
+.new-conversation { align-self: flex-start; margin-bottom: 14px; }
+
 .conversation {
   /* flex: 1 使用面板剩余高度；min-height: 0 允许缩小并在内部滚动。 */
   flex: 1;
@@ -188,6 +191,37 @@ h1 {
   color: #fffef9;
   border-radius: 14px 4px 14px 14px;
 }
+
+.reply-panel {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #e3e7de;
+  border-radius: 14px;
+  background: #f6f7f1;
+}
+
+.reply-label {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: #607268;
+}
+
+.reply-text {
+  min-height: 1.7em;
+  max-height: 8.5em;
+  overflow-y: auto;
+  margin: 0;
+  color: #263e38;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-message.incomplete .bubble { border: 1px dashed #a34436; }
+.chat-message .message-state { margin-top: 5px; color: #a34436; font-size: 11px; }
+.chat-message.stopped .bubble { border: 1px dashed #87998b; }
+.chat-message.stopped .message-state { color: #607268; }
 
 .composer { margin-top: 14px; }
 
@@ -280,6 +314,9 @@ button {
 }
 
 button:hover:not(:disabled) { background: #466552; }
+.input-row button[hidden] { display: none; }
+.stop-button { background: #786454; }
+.stop-button:hover:not(:disabled) { background: #645044; }
 
 /* 等待后端时，JS 设置 disabled；CSS 只负责显示不可点击的外观。 */
 button:disabled { opacity: 0.6; cursor: wait; }

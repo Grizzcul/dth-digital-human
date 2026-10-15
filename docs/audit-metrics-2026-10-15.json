@@ -1,0 +1,90 @@
+{
+  "local": {
+    "samples": 30,
+    "mock_chat_median_ms": 0.9,
+    "mock_chat_p95_ms": 1.1,
+    "health_during_chat_ms": 1.5,
+    "checks": {
+      "empty_message_400": true,
+      "long_message_400": true,
+      "invalid_conversation_400": true,
+      "non_object_400": true,
+      "content_type_415": true,
+      "oversize_413": true,
+      "private_/server.py_404": true,
+      "private_/local_config.py_404": true,
+      "private_/.git/config_404": true,
+      "private_/../local_config.py_404": true,
+      "video_range_206": true,
+      "invalid_range_416": true,
+      "head_without_body": true,
+      "health_responds_during_chat": true,
+      "delayed_chat_completes": true
+    },
+    "note": "模拟模型回答，只衡量 HTTP/JSON 本地处理，不代表真实模型延迟。"
+  },
+  "cloud": [
+    {
+      "mode": "blocking",
+      "headers_ms": 6862.89,
+      "complete_ms": 6863.48,
+      "answer_characters": 12,
+      "usage": {
+        "prompt_tokens": 139,
+        "completion_tokens": 86,
+        "total_tokens": 225,
+        "latency": 5.274
+      }
+    },
+    {
+      "mode": "streaming",
+      "headers_ms": 1173.21,
+      "first_text_ms": 7010.4,
+      "answer_characters": 19,
+      "events": {
+        "workflow_started": 1,
+        "node_started": 3,
+        "node_finished": 3,
+        "message": 6,
+        "message_end": 1,
+        "workflow_finished": 1
+      },
+      "nodes": [
+        {
+          "node_type": "start",
+          "elapsed_time": 9.2e-05,
+          "status": "succeeded"
+        },
+        {
+          "node_type": "llm",
+          "elapsed_time": 5.970838,
+          "status": "succeeded"
+        },
+        {
+          "node_type": "answer",
+          "elapsed_time": 9.7e-05,
+          "status": "succeeded"
+        }
+      ],
+      "message_end": true,
+      "workflow_finished": true,
+      "answer_end_ms": 7551.69,
+      "workflow_status": "succeeded",
+      "complete_ms": 7551.86,
+      "usage": {
+        "prompt_tokens": 139,
+        "completion_tokens": 143,
+        "total_tokens": 282,
+        "latency": 5.961
+      }
+    }
+  ],
+  "app_inspection": {
+    "mode": "advanced-chat",
+    "custom_input_fields": [],
+    "speech_to_text_enabled": false,
+    "text_to_speech_enabled": false,
+    "retriever_resource_enabled": true,
+    "suggested_questions_after_answer_enabled": false
+  }
+}
