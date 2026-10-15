@@ -1,24 +1,6 @@
-// ===== 0. 角色配置：平时换角色，只改下面这一行，然后保存、刷新网页 =====
-const ACTIVE_CHARACTER = "Grace"; // 改成 "Grace"：使用原来的眨眼角色。
-
-// 每个角色都有图片；video 为 null 表示只显示图片，不播放视频。
-// 路径相对于 index.html，文件夹和文件名要与电脑上的名称一致。
-const CHARACTERS = {
-  Grace: {
-    name: "Grace",
-    image: "png/Grace/avatar-idle.png",
-    video: "png/Grace/avatar-blink.webm",
-  },
-  Liz: {
-    name: "Liz",
-    image: "png/Liz/liz-idle.png",
-    video: "png/Liz/liz-blink.webm",
-  },
-};
-const activeCharacter = CHARACTERS[ACTIVE_CHARACTER];
-if (!activeCharacter) {
-  throw new Error("角色名称不存在，请检查 ACTIVE_CHARACTER 与 CHARACTERS 中的名称。");
-}
+// ===== 0. 单角色：替换 png/avatar.png 和配套 avatar.webm / avatar.mp4 即可 =====
+// 不按人物姓名分配接口；动作素材由本地后端检测，缺少视频时使用图片。
+const activeCharacter = { name: "数字人助手", image: "png/avatar.png", video: null };
 
 // ===== 1. 找到要操作的页面元素 =====
 // getElementById("名字") 对应 HTML 中 id="名字" 的元素。
@@ -26,6 +8,7 @@ const avatar = document.getElementById("avatar");
 // 找到角色视频，以及没有视频或播放失败时显示的静态图。
 const avatarVideo = document.getElementById("avatar-video");
 const avatarFallback = document.getElementById("avatar-fallback");
+const assetMessage = document.getElementById("asset-message");
 const statusText = document.getElementById("status-text");
 const replyText = document.getElementById("reply-text");
 const conversation = document.getElementById("conversation");
@@ -35,13 +18,30 @@ const messageInput = document.getElementById("message-input");
 const sendButton = document.getElementById("send-button");
 const stopButton = document.getElementById("stop-button");
 const connectionMessage = document.getElementById("connection-message");
+const speechToggle = document.getElementById("speech-toggle");
+const speechPreview = document.getElementById("speech-preview");
+const speechStop = document.getElementById("speech-stop");
+const speechStatus = document.getElementById("speech-status");
+const spokenCaption = document.getElementById("spoken-caption");
+const spokenText = document.getElementById("spoken-text");
+let currentSpeechText = "";
 // 模型开关：checked 为 true 才走 Python / Dify；否则直接由 JS 回应。
 const modelToggle = document.getElementById("model-toggle");
 let isSending = false;
 let activeRequest = null;
+const testToggle = document.getElementById("test-toggle");
+const testCaseButtons = document.getElementById("test-case-buttons");
+const cacheCheck = document.getElementById("cache-check");
+const cachePrepare = document.getElementById("cache-prepare");
+const cacheCancel = document.getElementById("cache-cancel");
+const cacheStatus = document.getElementById("cache-status");
+const replySource = document.getElementById("reply-source");
+let testCases = [], testRevision = "", cachePlan = null;
+let cacheBusy = false, preparation = null;
+testToggle.checked = false;
 // ===== 会话存储：变量像工作台，localStorage 像浏览器里的小抽屉 =====
-// 每个角色用自己的存储名称，切换 Grace / Liz 时不会拿错对话编号。
-const CONVERSATION_KEY = `dth.conversation.${ACTIVE_CHARACTER}`;
+// 单角色只保留一个会话入口；不自动接入旧 Grace / Liz 的会话。
+const CONVERSATION_KEY = "dth.conversation.avatar";
 let conversationId = "";
 try {
   // getItem 读取抽屉里的编号；没存过时得到 null，|| "" 将它变成空字符串。
@@ -59,7 +59,7 @@ function rememberConversation(id) {
       // setItem 写入小抽屉：页面关闭或刷新后，编号仍保留在这个浏览器中。
       localStorage.setItem(CONVERSATION_KEY, id);
     } else {
-      // 只移除这个角色的编号，不清空其他网站数据，也不删除 Dify 云端对话。
+      // 只移除当前会话的编号，不清空其他网站数据，也不删除 Dify 云端对话。
       localStorage.removeItem(CONVERSATION_KEY);
     }
   } catch {
@@ -111,9 +111,10 @@ const assistantName = activeCharacter.name;
 document.getElementById("assistant-name").textContent = assistantName;
 
 modelToggle.addEventListener("change", () => {
+  speech.stop();
   // 保留直接打开 HTML 时，开启模型模式的连接提醒。
   connectionMessage.textContent = modelToggle.checked && window.location.protocol === "file:"
-    ? "模型模式需要 Python 后端，请通过启动快捷方式打开网页。"
+    ? "模型模式需要 Python 后端，请运行 server.py 后通过本机地址打开网页。"
     : "";
   // 切换模式后清除上一种模式的状态提示。
   clearTimeout(resetTimer);
@@ -186,7 +187,14 @@ function updateVideoPlayback() {
   else playAvatarVideo();
 }
 
-avatarVideo.addEventListener("loadeddata", updateVideoPlayback);
+avatarVideo.addEventListener("loadeddata", () => {
+  if (!avatarVideo.error && activeCharacter.video) {
+    avatarVideo.hidden = false;
+    avatarFallback.hidden = true;
+    assetMessage.textContent = "";
+    updateVideoPlayback();
+  }
+});
 avatarVideo.addEventListener("ended", () => {
   pauseAvatarVideo();
   waitingForNextPlay = true;
@@ -199,11 +207,16 @@ avatarVideo.addEventListener("error", () => {
   // 隐藏视频也会让 canPlayVideo() 返回 false，不需要另一份失败状态。
   avatarVideo.hidden = true;
   avatarFallback.hidden = false;
-  console.warn("角色视频无法播放，已改用配套图片。请检查角色配置中的 video 路径。");
+  assetMessage.textContent = "动作视频无法播放，已显示静态图片。请检查视频格式。";
+});
+avatarFallback.addEventListener("error", () => {
+  // 视频能正常播放时，不让备用图片错误遮住人物。
+  if (avatarVideo.hidden) assetMessage.textContent = "人物图片无法读取，请检查 png/avatar.png。聊天仍可使用。";
 });
 document.addEventListener("visibilitychange", updateVideoPlayback);
 reducedMotion.addEventListener("change", updateVideoPlayback);
 window.addEventListener("pagehide", () => {
+  speech.stop();
   pageActive = false;
   pauseAvatarVideo();
 });
@@ -217,23 +230,38 @@ function retryAvatarPlayback() {
 }
 document.addEventListener("pointerdown", retryAvatarPlayback);
 document.addEventListener("keydown", retryAvatarPlayback);
-// 配置在这里应用一次；换角色的方式是修改顶部配置，再刷新网页。
-// 图片同时用作静态角色、视频第一帧预览、视频失败时的备用画面。
+// 先显示图片；检测素材只在打开/刷新页面时执行一次，不轮询、不调用模型。
 avatarFallback.src = activeCharacter.image;
 avatarFallback.alt = `${assistantName} 的角色图片`;
-if (activeCharacter.video) {
-  avatarVideo.poster = activeCharacter.image;
-  avatarVideo.setAttribute("aria-label", `${assistantName} 的动作动画`);
-  avatarVideo.preload = "auto";
-  avatarVideo.hidden = false;
-  avatarFallback.hidden = true;
-  // 先注册上面的加载事件，再设置地址，避免错过加载完成的通知。
-  avatarVideo.src = activeCharacter.video;
-  avatarVideo.load();
-} else {
-  avatarVideo.hidden = true;
-  avatarFallback.hidden = false;
+avatarVideo.hidden = true;
+avatarFallback.hidden = false;
+async function loadAvatarAssets() {
+  if (window.location.protocol === "file:") {
+    assetMessage.textContent = "请启动 server.py 并通过本机地址打开网页，以加载动作视频。";
+    return;
+  }
+  try {
+    const response = await fetch("/api/avatar", { cache: "no-store", signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error("无法检测素材");
+    const assets = await response.json();
+    // 只接受固定素材名，不让配置改变页面将要加载的来源。
+    if (assets.image !== null && assets.image !== "png/avatar.png") throw new Error("图片路径无效");
+    if (![null, "png/avatar.webm", "png/avatar.mp4"].includes(assets.video)) throw new Error("视频路径无效");
+    activeCharacter.video = assets.video;
+    if (!assets.image) assetMessage.textContent = "未找到 png/avatar.png，请放入人物图片。";
+    else if (!assets.video) assetMessage.textContent = "当前使用静态图片；加入配套动作视频后刷新即可播放。";
+    if (assets.video) {
+      avatarVideo.poster = assets.image ? activeCharacter.image : "";
+      avatarVideo.setAttribute("aria-label", `${assistantName} 的动作动画`);
+      avatarVideo.preload = "auto";
+      avatarVideo.src = assets.video;
+      avatarVideo.load();
+    }
+  } catch {
+    assetMessage.textContent = "无法检测动作素材，已尝试显示图片。请确认后端已更新；聊天仍可使用。";
+  }
 }
+void loadAvatarAssets();
 
 // ===== 2. 把一条消息添加到页面 =====
 // role 是消息来自谁（"user" 或 "assistant"），text 是消息内容。
@@ -322,8 +350,260 @@ async function stopCurrentReply(request) {
 }
 
 stopButton.addEventListener("click", () => {
+  speech.stop(); // 本地声音立即停止，不等待 Dify 的停止确认。
   if (activeRequest) void stopCurrentReply(activeRequest);
 });
+
+// 从同一个起点计时，帮助区分：模型慢、等分句、语音慢，还是播放慢。
+const latencyValues = document.getElementById("latency-values");
+let latencyStart = 0;
+let latencyMarks = {};
+let latencyGaps = 0;
+let latencyCache = { hit: 0, miss: 0, unsaved: 0 };
+function resetLatency() {
+  latencyStart = Date.now();
+  latencyMarks = {};
+  latencyGaps = 0;
+  latencyCache = { hit: 0, miss: 0, unsaved: 0 };
+  latencyValues.textContent = "等待响应…";
+}
+function markLatency(stage) {
+  if (!latencyStart) return;
+  if (stage === "underrun") latencyGaps++;
+  else if (stage.startsWith("cache_")) latencyCache[stage.slice(6)]++;
+  else {
+    if (stage in latencyMarks) return;
+    latencyMarks[stage] = Date.now() - latencyStart;
+  }
+  const seconds = value => (value / 1000).toFixed(2) + " 秒";
+  const labels = { first_text: "首字", first_clause: "首段可朗读", first_audio: "首包音频", first_play: "开始播放", text_done: "文字完成" };
+  const parts = Object.entries(labels).filter(([key]) => key in latencyMarks)
+    .map(([key, label]) => label + "：" + seconds(latencyMarks[key]));
+  if ("tts_request" in latencyMarks && "first_audio" in latencyMarks) {
+    parts.push("其中语音首包等待：" + seconds(latencyMarks.first_audio - latencyMarks.tts_request));
+  }
+  if ("first_audio" in latencyMarks) parts.push("缓冲不足：" + latencyGaps + " 次");
+  if (latencyCache.hit || latencyCache.miss) parts.push(`音频缓存 ${latencyCache.hit} 段 · 请求云端合成 ${latencyCache.miss} 段`);
+  if (latencyCache.unsaved) parts.push("部分音频未能保存到缓存");
+  latencyValues.textContent = parts.join(" · ") || "等待语音首包…";
+}
+
+// 语音层独立于模型请求：朗读失败不会阻塞文字输出。
+const speech = new window.ReplySpeech({
+  onMetric: markLatency,
+  timers: { setTimeout: (fn, delay) => setTimeout(fn, delay), clearTimeout: id => clearTimeout(id) },
+  onState: ({ state, text, active }) => {
+    speechStop.hidden = !active;
+    speechPreview.disabled = isSending || active || !speech.ready;
+    if (state === "speaking") {
+      spokenCaption.hidden = false;
+      spokenText.textContent = text;
+      speechStatus.textContent = "正在朗读";
+    } else if (state === "waiting") {
+      speechStatus.textContent = "正在等待文字或合成语音…";
+    } else if (state === "idle") {
+      speechStatus.textContent = "朗读完成";
+    } else if (state === "stopped") {
+      speechStatus.textContent = speechToggle.checked ? "本轮朗读已停止" : "语音已关闭";
+    } else if (state === "replaced") {
+      speechStatus.textContent = "回答已更新，旧内容朗读已停止。";
+    } else if (state === "error") {
+      speechStatus.textContent = text === "not-allowed"
+        ? "浏览器未允许朗读，请先点击“试听”，文字聊天仍可使用。"
+        : `${text} 文字聊天仍可使用。`;
+    }
+    syncDevelopmentControls();
+  },
+});
+speechToggle.checked = false; // 刷新和恢复历史时均不自动出声。
+speechToggle.disabled = speechPreview.disabled = true;
+// 删除旧的浏览器音色偏好；只清理本项目这一项设置。
+try { localStorage.removeItem("dth.speech.voice"); } catch {}
+async function loadSpeechSettings() {
+  try {
+    if (!speech.supported) throw new Error("当前浏览器不支持音频播放。");
+    if (window.location.protocol === "file:") throw new Error("请通过启动快捷方式打开网页，以连接语音后端。");
+    const response = await fetch("/api/tts", { cache: "no-store", signal: AbortSignal.timeout(5000) });
+    const settings = await response.json();
+    if (!response.ok || typeof settings.configured !== "boolean") throw new Error("无法检测语音配置，请重启最新后端。");
+    // 有本机缓存时，没有密钥也能播放；生成新音频才要求密钥。
+    speech.ready = settings.configured || settings.cache_available === true;
+    speechToggle.disabled = !speech.ready;
+    speechPreview.disabled = isSending || !speech.ready;
+    speechStatus.textContent = settings.configured
+      ? "固定音色：魅力女友 2.0。音频优先读缓存；普通模式未命中会合成并产生用量。"
+      : settings.cache_available ? "可播放本机缓存；生成新音频需要语音 API Key。"
+      : "请在 local_config.py 填写 DOUBAO_TTS_API_KEY，并重启后端。";
+  } catch (error) {
+    speechStatus.textContent = `${error.message} 文字聊天仍可使用。`;
+  }
+  syncDevelopmentControls();
+}
+void loadSpeechSettings();
+speechToggle.addEventListener("change", () => {
+  if (speechToggle.checked) speech.warmup();
+  if (!speechToggle.checked) speech.stop();
+  else if (isSending) speech.begin(currentSpeechText, { cacheOnly: testToggle.checked });
+  else speechStatus.textContent = "语音已开启，下一条回答会自动朗读。";
+});
+speechPreview.addEventListener("click", () => {
+  if (isSending || cacheBusy || !speech.ready || speech.active) return;
+  // 试听只读这一句，不顺便开启自动播报，也不调用 Dify。
+  resetLatency();
+  speech.begin("", { cacheOnly: testToggle.checked });
+  speech.update(testToggle.checked ? testCases[0].reply : "你回来啦，今天过得怎么样，有什么想跟我聊聊的吗？");
+  speech.finish();
+});
+speechStop.addEventListener("click", () => speech.stop());
+
+// ===== 开发测试：只读预设回答；准备按钮是独立、明确的付费合成入口 =====
+function syncDevelopmentControls() {
+  const busy = isSending || cacheBusy;
+  testToggle.disabled = busy || !testCases.length;
+  modelToggle.disabled = busy || testToggle.checked;
+  newConversationButton.disabled = busy || testToggle.checked;
+  cacheCheck.disabled = busy || speech.active;
+  cachePrepare.hidden = !cachePlan?.missing.length;
+  cachePrepare.disabled = busy || speech.active || !cachePlan?.can_generate;
+  cacheCancel.hidden = !preparation;
+  speechPreview.disabled = busy || speech.active || !speech.ready;
+  speechToggle.disabled = cacheBusy || !speech.ready;
+  if (cacheBusy) { sendButton.disabled = true; messageInput.disabled = true; }
+}
+
+async function cacheJSON(url, data, signal = AbortSignal.timeout(5000)) {
+  const response = await fetch(url, data === undefined ? { cache: "no-store", signal } : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), signal,
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "测试缓存接口不可用，请重启最新后端。");
+  return result;
+}
+
+async function loadTestCases() {
+  const data = await cacheJSON("/api/test/cases");
+  if (!Array.isArray(data.cases) || !data.cases.length || typeof data.revision !== "string") {
+    throw new Error("无法读取测试台词，请重启最新后端。");
+  }
+  testCases = data.cases;
+  testRevision = data.revision;
+  testCaseButtons.replaceChildren();
+  for (const item of testCases) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.classList.add("speech-button");
+    button.textContent = item.inputs[0];
+    button.addEventListener("click", () => {
+      if (isSending || cacheBusy) return;
+      messageInput.value = item.inputs[0];
+      messageInput.focus(); // 只填入，不自动发送、不开模型。
+    });
+    testCaseButtons.appendChild(button);
+  }
+}
+void loadTestCases().then(() => {
+  cacheStatus.textContent = `已加载 ${testCases.length} 条测试问答。可先检查音频，准备后重复测试不调用云端。`;
+}).catch(error => { cacheStatus.textContent = error.message; }).finally(syncDevelopmentControls);
+
+testToggle.addEventListener("change", () => {
+  speech.stop();
+  currentSpeechText = "";
+  spokenCaption.hidden = true;
+  replySource.textContent = testToggle.checked
+    ? "开发测试已开启：仅匹配预设问答和本机音频，未命中不调用云端。"
+    : "已恢复普通模式。测试记录未发送给 Dify，原模型会话保持不变。";
+  syncDevelopmentControls();
+});
+
+cacheCheck.addEventListener("click", async () => {
+  if (isSending || cacheBusy || speech.active) return;
+  cacheBusy = true;
+  cachePlan = null;
+  syncDevelopmentControls();
+  cacheStatus.textContent = "正在检查台词和音频缓存…";
+  try {
+    await loadTestCases();
+    const manifest = { revision: testRevision, cases: testCases.map(item => ({ id: item.id, segments: window.ReplySpeech.split(item.reply) })) };
+    const plan = await cacheJSON("/api/test/plan", manifest);
+    cachePlan = { ...plan, manifest, missing: plan.items.map((item, index) => ({ ...item, index })).filter(item => !item.cached) };
+    const chars = cachePlan.missing.reduce((sum, item) => sum + Array.from(item.text).length, 0);
+    cacheStatus.textContent = cachePlan.missing.length
+      ? `缺少 ${cachePlan.missing.length} 段音频，共 ${chars} 字。点击“生成缺失音频”会调用${plan.voice}并产生语音用量。${plan.can_generate ? "" : "请先填写语音密钥并重启。"}`
+      : `全部 ${plan.items.length} 段音频已缓存，可断开外网进行开发测试。`;
+  } catch (error) { cacheStatus.textContent = error.message; }
+  finally { cacheBusy = false; sendButton.disabled = messageInput.disabled = false; syncDevelopmentControls(); }
+});
+
+cachePrepare.addEventListener("click", async () => {
+  if (isSending || cacheBusy || speech.active || !cachePlan?.can_generate || !cachePlan.missing.length) return;
+  const plan = cachePlan;
+  const controller = new AbortController();
+  preparation = controller;
+  cacheBusy = true;
+  syncDevelopmentControls();
+  let completed = 0;
+  try {
+    // 逐段保存，已成功的段不会因下一段失败丢失；不自动重试，不重复生成命中的内容。
+    for (const item of plan.missing) {
+      if (controller.signal.aborted) throw new Error("准备已停止。");
+      cacheStatus.textContent = `正在准备第 ${completed + 1}/${plan.missing.length} 段，已保存 ${completed} 段…`;
+      const response = await fetch("/api/test/prepare", {
+        method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/x-ndjson" },
+        body: JSON.stringify({ ...plan.manifest, plan_id: plan.plan_id, index: item.index }),
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(40000)]),
+      });
+      const result = await window.ReplySpeech.consume(response, () => {}, () => !controller.signal.aborted);
+      if (!result?.cache_saved) throw new Error("音频没有保存成功，请重新检查缓存。");
+      completed++;
+    }
+    cachePlan = null;
+    cacheStatus.textContent = `准备完成，已保存 ${completed} 段音频。开启开发测试和语音播报后输入测试句即可。`;
+    await loadSpeechSettings();
+  } catch (error) {
+    cachePlan = null; // 重新检查后继续，只补缺少的段。
+    cacheStatus.textContent = `已保存 ${completed} 段。${controller.signal.aborted ? "已停止本地准备，当前云端合成可能仍会计费。" : error.message} 请重新检查后继续。`;
+  } finally {
+    preparation = null;
+    cacheBusy = false;
+    sendButton.disabled = messageInput.disabled = false;
+    syncDevelopmentControls();
+  }
+});
+cacheCancel.addEventListener("click", () => preparation?.abort());
+window.addEventListener("pagehide", () => preparation?.abort());
+
+async function showTestReply(text) {
+  isSending = true;
+  sendButton.disabled = messageInput.disabled = true;
+  syncDevelopmentControls();
+  const row = addMessage("user", `【测试】${text}`);
+  row.classList.add("test-message");
+  try {
+    const data = await cacheJSON("/api/test/reply", { message: text });
+    if (data.source !== "test_cache" || typeof data.reply !== "string") throw new Error("测试回答格式不正确。");
+    markLatency("first_text");
+    markLatency("text_done");
+    const answer = addMessage("assistant", data.reply);
+    answer.classList.add("test-message");
+    updateReply(answer, data.reply);
+    replySource.textContent = "测试回答命中 · 本轮未调用模型 · 语音仅使用本机缓存";
+    currentSpeechText = data.reply;
+    speech.update(data.reply);
+    speech.finish();
+    showReaction();
+    messageInput.value = "";
+  } catch (error) {
+    speech.stop();
+    replySource.textContent = "测试未完成 · 没有自动调用云端";
+    replyText.textContent = error.message;
+    connectionMessage.textContent = error.message;
+  } finally {
+    isSending = false;
+    sendButton.disabled = messageInput.disabled = false;
+    syncDevelopmentControls();
+    messageInput.focus();
+  }
+}
 
 // ===== 3. 两种回复方式：本地规则，或 Python / Dify =====
 // 【可以改】这里是关闭模型后的即时回复。只操作文字，不发网络请求。
@@ -441,7 +721,7 @@ function showReaction() {
 chatForm.addEventListener("submit", async (event) => {
   // form 默认会重新加载页面；这里阻止默认行为，保留当前对话。
   event.preventDefault();
-  if (isSending) return;
+  if (isSending || cacheBusy) return;
 
   // value 读取输入框内容；trim 去掉首尾空格。
   const text = messageInput.value.trim();
@@ -453,11 +733,25 @@ chatForm.addEventListener("submit", async (event) => {
   }
 
   connectionMessage.textContent = "";
+  resetLatency();
+  currentSpeechText = "";
+  spokenCaption.hidden = true;
+  if (speechToggle.checked) speech.begin("", { cacheOnly: testToggle.checked });
+  else speech.stop(false);
+  if (testToggle.checked) {
+    await showTestReply(text);
+    return; // 绝不落入 Dify 或本地规则分支。
+  }
   // 【关键分支】关闭模型时立即回复，return 保证不会继续调用下面的接口。
   if (!modelToggle.checked) {
+    replySource.textContent = "本地规则 · 未调用模型";
     addMessage("user", text);
     const reply = getLocalReply(text);
+    markLatency("first_text");
+    markLatency("text_done");
     updateReply(addMessage("assistant", reply), reply);
+    speech.update(reply);
+    speech.finish();
     showReaction();
     messageInput.value = "";
     messageInput.focus();
@@ -465,6 +759,8 @@ chatForm.addEventListener("submit", async (event) => {
   }
 
   isSending = true;
+  replySource.textContent = "Dify 模型回答";
+  syncDevelopmentControls();
   const request = { controller: new AbortController(), taskId: "", stopRequested: false, stopping: false, stopped: false, completed: false, stopPromise: null };
   activeRequest = request;
   sendButton.disabled = true;
@@ -476,6 +772,7 @@ chatForm.addEventListener("submit", async (event) => {
   // 当前模型请求完成前暂时锁住开关，避免把关闭开关误认为取消已发送的请求。
   modelToggle.disabled = true;
   newConversationButton.disabled = true;
+  speechPreview.disabled = true;
   sendButton.textContent = "等待中";
   chatForm.setAttribute("aria-busy", "true");
   connectionMessage.textContent = "";
@@ -492,14 +789,21 @@ chatForm.addEventListener("submit", async (event) => {
     const reply = await requestReply(text, (reply) => {
       if (request.stopRequested) return;
       partialReply = reply;
+      if (reply.trim()) markLatency("first_text");
+      currentSpeechText = reply;
       updateReply(assistantRow, reply);
+      speech.update(reply);
       statusText.textContent = "正在回答";
       sendButton.textContent = "回答中";
     }, request);
     updateReply(assistantRow, reply);
+    markLatency("text_done");
+    speech.update(reply);
+    speech.finish();
     showReaction();
     messageInput.value = "";
   } catch (error) {
+    speech.stop();
     // Dify 的停止可能先让原流结束，再返回停止响应；等确认后再判断结果。
     if (request.stopPromise) await request.stopPromise;
     if (request.stopped) {
@@ -534,9 +838,11 @@ chatForm.addEventListener("submit", async (event) => {
     messageInput.disabled = false;
     modelToggle.disabled = false;
     newConversationButton.disabled = false;
+    speechPreview.disabled = speech.active || !speech.ready;
     sendButton.textContent = "发送";
     chatForm.setAttribute("aria-busy", "false");
     messageInput.focus();
+    syncDevelopmentControls();
   }
 });
 
@@ -551,7 +857,10 @@ function addWelcomeMessage() {
 addWelcomeMessage();
 
 newConversationButton.addEventListener("click", () => {
-  if (isSending) return; // 请求进行中时不切换会话，避免回答归错地方。
+  if (isSending || cacheBusy || testToggle.checked) return;
+  speech.stop();
+  currentSpeechText = "";
+  spokenCaption.hidden = true;
   rememberConversation(""); // 工作台和浏览器里的编号一起清空。
   conversation.replaceChildren(); // 只清空网页中的消息显示。
   clearTimeout(resetTimer);

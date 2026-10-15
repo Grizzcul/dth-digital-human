@@ -2,7 +2,9 @@
 """
 
 import argparse
+import base64
 import json
+from time import perf_counter
 import webbrowser
 from http.client import HTTPException
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,6 +14,9 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from uuid import UUID
+
+from cache import AudioCache, CacheError, digest, load_cases
+from tts import MAX_SPEECH_LENGTH, SAMPLE_RATE, TTS_VOICE_NAME, TTSError, audio_profile, synthesize_speech, stream_speech
 
 
 # __file__ 是当前 Python 文件；网页路径始终相对于它，与启动目录无关。
@@ -30,6 +35,12 @@ try:
 except ImportError:
     DIFY_API_KEY = ""
 
+# 语音密钥与 Dify 密钥分别读取；没配置语音时，文字聊天仍可正常使用。
+try:
+    from local_config import DOUBAO_TTS_API_KEY
+except ImportError:
+    DOUBAO_TTS_API_KEY = ""
+
 # 浏览器只能下载网页文件，以及下方登记的 png 文件夹内的图片和视频。
 # 第一个值是文件路径，第二个值告诉浏览器“这是什么类型的内容”。
 PUBLIC_FILES = {
@@ -37,6 +48,7 @@ PUBLIC_FILES = {
     "/index.html": ("index.html", "text/html; charset=utf-8"),
     "/style.css": ("style.css", "text/css; charset=utf-8"),
     "/script.js": ("script.js", "text/javascript; charset=utf-8"),
+    "/speech.js": ("speech.js", "text/javascript; charset=utf-8"),
 }
 
 # 启动时自动登记角色素材，新增角色不用再逐个修改 Python 路径。
@@ -50,12 +62,31 @@ ASSET_TYPES = {
     ".mp4": "video/mp4",
 }
 ASSET_DIR = PROJECT_DIR / "png"
+# 固定入口预先登记，运行期间新增、删除或替换后刷新网页即可生效。
+AVATAR_ASSETS = {
+    "png/avatar.png": "image/png",
+    "png/avatar.webm": "video/webm",
+    "png/avatar.mp4": "video/mp4",
+}
+PUBLIC_FILES.update({"/" + name: (name, kind) for name, kind in AVATAR_ASSETS.items()})
 for asset in ASSET_DIR.rglob("*"):
     content_type = ASSET_TYPES.get(asset.suffix.lower())
     # 只开放素材文件；链接也不能指向素材目录以外的文件。
     if content_type and asset.is_file() and asset.resolve().is_relative_to(ASSET_DIR.resolve()):
         relative_path = asset.relative_to(PROJECT_DIR).as_posix()
         PUBLIC_FILES["/" + relative_path] = (relative_path, content_type)
+
+
+def avatar_assets():
+    """单角色固定素材；每次刷新重新检查，只允许素材目录内的普通文件。"""
+    def available(name):
+        path = PROJECT_DIR / name
+        return path.is_file() and path.resolve().is_relative_to(ASSET_DIR.resolve())
+
+    return {
+        "image": "png/avatar.png" if available("png/avatar.png") else None,
+        "video": next((name for name in ("png/avatar.webm", "png/avatar.mp4") if available(name)), None),
+    }
 
 
 class LocalServer(ThreadingHTTPServer):
@@ -67,6 +98,49 @@ class LocalServer(ThreadingHTTPServer):
         # 只允许停止本服务当前持有的任务；任务结束即移除，不接受任意云端编号。
         self.active_tasks = {}
         self.tasks_lock = Lock()
+        self.tts_api_key = DOUBAO_TTS_API_KEY.strip()
+        self.tts_lock = Lock()  # 一次只合成一句，重复点击不并发消耗额度。
+        self.audio_cache = AudioCache(PROJECT_DIR / "data" / "cache.sqlite3")
+        self.test_cases_path = PROJECT_DIR / "test_cases.json"
+
+
+def speech_key(text, profile):
+    return digest({"text": text.strip(), "profile": profile})
+
+
+def test_audio_plan(backend, data):
+    """浏览器用同一套分句逻辑准备和播放；后端核对台词，拒绝过期计划。"""
+    cases, revision = load_cases(backend.test_cases_path)
+    manifest = data.get("cases")
+    if data.get("revision") != revision:
+        raise CacheError("测试台词已修改，请重新点击“检查测试音频”。")
+    if not isinstance(manifest, list) or len(manifest) != len(cases):
+        raise CacheError("测试音频计划不完整，请重新检查。")
+    expected = {case["id"]: case for case in cases}
+    seen, items = set(), []
+    profile = audio_profile()
+    for entry in manifest:
+        if not isinstance(entry, dict):
+            raise CacheError("测试音频计划格式错误。")
+        name, segments = entry.get("id"), entry.get("segments")
+        if not isinstance(name, str) or name not in expected or name in seen:
+            raise CacheError("测试编号无效或重复。")
+        seen.add(name)
+        if not isinstance(segments, list) or not 1 <= len(segments) <= 24 or any(
+            not isinstance(text, str) or not 1 <= len(text.strip()) <= MAX_SPEECH_LENGTH for text in segments
+        ):
+            raise CacheError("测试回答分段无效，单段不能超过 200 字。")
+        if "".join("".join(segments).split()) != "".join(expected[name]["reply"].split()):
+            raise CacheError("测试台词与分段不一致，请使用不含 Markdown 的普通文本并重新检查。")
+        for text in segments:
+            key = speech_key(text, profile)
+            if not any(item["key"] == key for item in items):
+                items.append({"text": text.strip(), "key": key})
+    backend.audio_cache.pin(item["key"] for item in items)
+    for item in items:
+        item["cached"] = backend.audio_cache.get(item["key"], touch=False) is not None
+    plan_id = digest({"revision": revision, "cases": manifest, "profile": profile})
+    return {"plan_id": plan_id, "items": items, "can_generate": bool(backend.tts_api_key), "voice": TTS_VOICE_NAME}
 
 
 def stop_dify_task(task_id, api_key):
@@ -230,14 +304,15 @@ class AssistantHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlsplit(self.path).path
-        if path not in ("/api/chat", "/api/chat/stop"):
+        if path not in ("/api/chat", "/api/chat/stop", "/api/tts", "/api/test/reply",
+                        "/api/test/tts", "/api/test/plan", "/api/test/prepare"):
             self.send_json(404, {"error": "没有这个接口。"})
             return
 
         # 不信任浏览器的输入限制：后端也要检查格式、字数和请求大小。
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= 8192:
+            if not 0 < length <= (131072 if path in ("/api/test/plan", "/api/test/prepare") else 8192):
                 self.send_json(413, {"error": "请求为空或太大。"})
                 return
             if self.headers.get_content_type() != "application/json":
@@ -250,6 +325,12 @@ class AssistantHandler(BaseHTTPRequestHandler):
 
         if not isinstance(data, dict):
             self.send_json(400, {"error": "消息必须是一个 JSON 对象。"})
+            return
+        if path.startswith("/api/test/"):
+            self.test_request(path, data)
+            return
+        if path == "/api/tts":
+            self.send_speech(data)
             return
         if path == "/api/chat/stop":
             self.stop_chat(data)
@@ -293,6 +374,187 @@ class AssistantHandler(BaseHTTPRequestHandler):
             self.send_json(502, {"error": "Dify 没有返回有效的回答或会话编号，请确认应用类型为 Chatflow。"})
             return
         self.send_json(200, result)
+
+    def test_request(self, path, data):
+        # 独立测试入口绝不调用 Dify，也不创建/修改 conversation_id。
+        try:
+            if path == "/api/test/tts":
+                self.send_speech({**data, "cache_only": True})
+                return
+            if path == "/api/test/reply":
+                text = data.get("message")
+                if not isinstance(text, str) or not 1 <= len(text.strip()) <= MAX_MESSAGE_LENGTH:
+                    self.send_json(400, {"error": "请输入 1～500 字的测试句。"})
+                    return
+                cases, _ = load_cases(self.server.test_cases_path)
+                case = next((case for case in cases if text.strip() in [v.strip() for v in case["inputs"]]), None)
+                if case is None:
+                    self.send_json(404, {"error": "测试句未收录，请编辑 test_cases.json；本轮没有调用模型或语音服务。"})
+                else:
+                    self.send_json(200, {"reply": case["reply"], "source": "test_cache", "case_id": case["id"]})
+                return
+            plan = test_audio_plan(self.server, data)
+            if path == "/api/test/plan":
+                self.send_json(200, plan)
+                return
+            if "application/x-ndjson" not in self.headers.get("Accept", ""):
+                self.send_json(415, {"error": "准备音频需要 application/x-ndjson 响应格式。"})
+                return
+            index = data.get("index")
+            if data.get("plan_id") != plan["plan_id"] or type(index) is not int or not 0 <= index < len(plan["items"]):
+                raise CacheError("音色、台词或准备计划已变化，请重新检查。")
+            # 只有用户主动点“生成缺失音频”才访问此入口；一次只生成计划中的一段。
+            self.send_speech({"text": plan["items"][index]["text"]}, pinned=True)
+        except CacheError as error:
+            self.send_json(409, {"error": str(error)})
+
+    def send_speech(self, data, pinned=False):
+        """先查本机音频，未命中时按模式决定是否合成；支持 PCM 流与 MP3。"""
+        text = data.get("text")
+        if not isinstance(text, str) or not 1 <= len(text.strip()) <= MAX_SPEECH_LENGTH:
+            self.send_json(400, {"error": f"朗读文字需要在 1～{MAX_SPEECH_LENGTH} 字以内。"})
+            return
+        cache_only = data.get("cache_only", False)
+        if type(cache_only) is not bool:
+            self.send_json(400, {"error": "cache_only 必须是布尔值。"})
+            return
+        text = text.strip()
+        streaming = "application/x-ndjson" in self.headers.get("Accept", "")
+        profile = audio_profile("pcm" if streaming else "mp3")
+        key = speech_key(text, profile)
+        cache = getattr(self.server, "audio_cache", None)
+        cached = None
+        try:
+            if cache:
+                cached = cache.get(key)
+        except CacheError as error:
+            if cache_only or pinned:
+                self.send_json(503, {"error": str(error)})
+                return
+            print("音频缓存不可用，本次按普通语音请求处理。", flush=True)
+        if cached is not None:
+            if streaming:
+                self.send_speech_stream(text, cached=cached)
+            else:
+                self.send_mp3(cached, "hit")
+            return
+        if cache_only:
+            self.send_json(412, {"error": "没有对应音频缓存，请先检查并生成测试音频；本轮未调用语音服务。"})
+            return
+        if not self.server.tts_api_key:
+            self.send_json(503, {"error": "请在 local_config.py 填写 DOUBAO_TTS_API_KEY，然后重启后端。"})
+            return
+        if not self.server.tts_lock.acquire(blocking=False):
+            self.send_json(429, {"error": "上一句语音仍在合成，请稍后再试。"})
+            return
+        if streaming:
+            self.send_speech_stream(text, cache_key=key, profile=profile, pinned=pinned)
+            return
+        failure = None
+        try:
+            audio = synthesize_speech(text.strip(), self.server.tts_api_key)
+            if cache:
+                try:
+                    cache.put(key, text, profile, audio)
+                except CacheError:
+                    print("MP3 已生成，但缓存保存失败。", flush=True)
+        except HTTPError as error:
+            hint = ("请在豆包语音“开通管理”检查语音合成2.0是否已开通，并确认 API Key 来自同一项目。"
+                    if error.code == 403 else "请检查语音 API Key、服务权限及账户额度。")
+            failure = (502, f"豆包语音请求失败（HTTP {error.code}）。{hint}")
+            error.close()
+        except (OSError, HTTPException):
+            failure = (504, "语音服务连接失败或超时，请稍后手动重试。")
+        except TTSError as error:
+            failure = (502, str(error))
+        finally:
+            self.server.tts_lock.release()
+        if failure:
+            self.send_json(failure[0], {"error": failure[1]})
+            return
+        self.send_mp3(audio, "miss")
+
+    def send_mp3(self, audio, cache_state):
+        self.send_response(200)
+        self.send_header("Content-Type", "audio/mpeg")
+        self.send_header("Content-Length", str(len(audio)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Audio-Cache", cache_state)
+        self.end_headers()
+        try:
+            self.wfile.write(audio)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # 页面停止播放或关闭时，不把断开连接当成模型错误。
+
+    def send_speech_stream(self, text, cached=None, cache_key=None, profile=None, pinned=False):
+        """同一个接口用 Accept 区分播放方式；NDJSON 每行一块，done 才算完整。"""
+        def emit(event):
+            self.wfile.write((json.dumps(event) + "\n").encode("utf-8"))
+            self.wfile.flush()  # 少了这一行，音频可能又积攒到最后才送到网页。
+
+        started = perf_counter()
+        first = None
+        events = (iter(cached[i:i + 24000] for i in range(0, len(cached), 24000)) if cached is not None
+                  else stream_speech(text, self.server.tts_api_key))
+        collected = bytearray()
+        saved = cached is not None
+        warning = None
+        error_message = None
+        disconnected = False
+        try:
+            # 响应头也放在 try 内：页面立即取消时，同样需要释放合成锁。
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.close_connection = True
+            emit({"event": "start", "sample_rate": SAMPLE_RATE, "format": "pcm_s16le",
+                  "cache": "hit" if cached is not None else "miss"})
+            for audio in events:
+                if first is None:
+                    first = perf_counter() - started
+                emit({"event": "audio", "data": base64.b64encode(audio).decode("ascii")})
+                if cached is None and cache_key:
+                    collected.extend(audio)
+            cache = getattr(self.server, "audio_cache", None)
+            if cached is None and cache and cache_key:
+                try:
+                    cache.put(cache_key, text, profile, bytes(collected), pinned=pinned)
+                    saved = True
+                except CacheError as error:
+                    if pinned:
+                        raise
+                    warning = str(error)
+        except (BrokenPipeError, ConnectionResetError):
+            disconnected = True
+        except HTTPError as error:
+            error_message = f"语音服务请求失败（HTTP {error.code}），请检查语音权限及额度。"
+            error.close()
+        except (OSError, HTTPException):
+            error_message = "语音连接中断或超时，请手动重试。"
+        except TTSError as error:
+            error_message = str(error)
+        except CacheError as error:
+            error_message = str(error)
+        finally:
+            if hasattr(events, "close"):
+                events.close()  # 关闭上游连接；不能承诺云端立即停止计费。
+            if cached is None:
+                self.server.tts_lock.release()
+        if disconnected:
+            return
+        try:
+            # 先释放锁再通知完成，下一句即可开始合成，与当前句的播放重叠。
+            if error_message:
+                emit({"event": "error", "error": error_message})
+            else:
+                elapsed = perf_counter() - started
+                emit({"event": "done", "first_chunk_ms": round(first * 1000),
+                      "synthesis_ms": round(elapsed * 1000), "cache_saved": saved, "warning": warning})
+                print(f"音频缓存{'命中' if cached is not None else '未命中'}：首包 {first:.2f}s，完成 {elapsed:.2f}s", flush=True)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def stop_chat(self, data):
         task_id = data.get("task_id")
@@ -368,6 +630,27 @@ class AssistantHandler(BaseHTTPRequestHandler):
                     self.server.active_tasks.pop(registered_task, None)
 
     def do_GET(self):
+        if urlsplit(self.path).path == "/api/test/cases":
+            try:
+                cases, revision = load_cases(self.server.test_cases_path)
+                self.send_json(200, {"cases": cases, "revision": revision})
+            except CacheError as error:
+                self.send_json(503, {"error": str(error)})
+            return
+        if urlsplit(self.path).path == "/api/tts":
+            # 只返回是否配置及音色名称，不返回密钥；刷新页面不会合成语音。
+            cache = getattr(self.server, "audio_cache", None)
+            try:
+                stats = cache.stats() if cache else {"entries": 0, "bytes": 0, "hits": 0}
+                available = cache is not None
+            except CacheError:
+                stats, available = {"entries": 0, "bytes": 0, "hits": 0}, False
+            self.send_json(200, {"configured": bool(self.server.tts_api_key), "voice": TTS_VOICE_NAME,
+                                 "cache_available": available, "cache": stats})
+            return
+        if urlsplit(self.path).path == "/api/avatar":
+            self.send_json(200, avatar_assets())
+            return
         # 启动器只检查这个接口，不调用模型、不消耗 token。
         if urlsplit(self.path).path == "/api/health":
             self.send_json(200, {"app": "dth-avatar", "project": str(PROJECT_DIR)})
@@ -385,6 +668,9 @@ class AssistantHandler(BaseHTTPRequestHandler):
             return
         relative_path, content_type = entry
         file_path = PROJECT_DIR / relative_path
+        if relative_path.startswith("png/") and not file_path.resolve().is_relative_to(ASSET_DIR.resolve()):
+            self.send_error(404, "File not public")
+            return
         try:
             file = file_path.open("rb")
         except OSError:

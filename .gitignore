@@ -16,3 +16,6 @@ __pycache__/
 /.venv/
 /*.lnk
 /.launcher*
+
+# 本机音频缓存不是源码，不把二进制数据库或 SQLite 日志上传 Git。
+/data/*.sqlite3*

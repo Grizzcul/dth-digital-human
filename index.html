@@ -7,13 +7,14 @@
   <title>我的数字人</title>
   <!-- HTML 定义结构；这两行分别连接另外两个文件。 -->
   <link rel="stylesheet" href="style.css">
+  <script src="speech.js" defer></script>
   <script src="script.js" defer></script>
 </head>
 <body>
   <!-- 中央卡片只包含数字人和输入框，展开记录不会改变它的布局。 -->
   <main class="card">
     <header>
-      <!-- 名字由 script.js 顶部的角色配置填写，不必在 HTML 中重复修改。 -->
+      <!-- 单角色名称由脚本填写；更换外观只需替换 png 下的固定素材。 -->
       <p class="eyebrow" id="assistant-name"></p>
       <h1>你好，我在这里。</h1>
       <p class="introduction">输入一句话，我们开始聊聊吧。</p>
@@ -36,12 +37,30 @@
           </div>
         </div>
 
+        <p class="asset-message" id="asset-message" role="status"></p>
+
         <section class="reply-panel" aria-label="当前回答">
           <p class="reply-label">当前回答</p>
           <p class="reply-text" id="reply-text" aria-live="off"></p>
+          <div class="spoken-caption" id="spoken-caption" hidden>
+            <span>朗读字幕</span>
+            <p id="spoken-text" aria-live="off"></p>
+          </div>
         </section>
 
         <form class="composer" id="chat-form">
+          <!-- 开发测试使用本机预设问答和音频，未命中也不调用云端。 -->
+          <div class="test-controls">
+            <label><input id="test-toggle" type="checkbox" disabled>开发测试模式（不调用云端）</label>
+          </div>
+          <details class="test-tools">
+            <summary>测试句与音频缓存</summary>
+            <div id="test-case-buttons" class="test-case-buttons"></div>
+            <button id="cache-check" type="button" class="speech-button">检查测试音频</button>
+            <button id="cache-prepare" type="button" class="speech-button" hidden>生成缺失音频</button>
+            <button id="cache-cancel" type="button" class="speech-button" hidden>停止准备</button>
+            <p id="cache-status" role="status">正在读取测试句…</p>
+          </details>
           <!-- 【新增：模型开关】不写 checked，所以每次打开页面默认不调用模型。 -->
           <div class="model-controls">
             <label class="model-toggle">
@@ -50,6 +69,20 @@
               <span>模型回答</span>
             </label>
           </div>
+          <div class="speech-controls" aria-label="语音播报设置">
+            <label class="speech-toggle"><input id="speech-toggle" type="checkbox" disabled>语音播报</label>
+            <!-- 音色在 tts.py 固定，网页不再列出电脑合成音。 -->
+            <span class="voice-label" id="speech-voice-name">魅力女友 2.0</span>
+            <button id="speech-preview" type="button" class="speech-button">试听</button>
+            <button id="speech-stop" type="button" class="speech-button" hidden>停止朗读</button>
+          </div>
+          <p class="speech-status" id="speech-status" role="status"></p>
+          <p class="speech-status" id="reply-source" role="status"></p>
+          <!-- 耗时只在事件发生时更新，不做定时请求；展开后可判断哪里在等。 -->
+          <details class="latency-panel">
+            <summary>本轮响应耗时</summary>
+            <p id="latency-values">发送消息或点击试听后显示。</p>
+          </details>
           <label class="input-label" for="message-input">你想说什么？</label>
           <div class="input-row">
             <!-- 【可以试着改 2】placeholder 是提示；maxlength 限制字数。 -->
@@ -59,7 +92,7 @@
             <button id="stop-button" class="stop-button" type="button" hidden>停止回答</button>
           </div>
         </form>
-        <p class="hint">Enter 发送 · 回答实时显示 · 右侧箭头查看完整记录</p>
+        <p class="hint">Enter 发送 · 开启语音可边生成边朗读 · 右侧查看完整记录</p>
         <!-- 正常时为空；连接失败时在输入框下方提示，抽屉收起也能看到。 -->
         <p class="connection-message" id="connection-message" role="status"></p>
       </section>

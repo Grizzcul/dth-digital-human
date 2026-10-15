@@ -16,8 +16,10 @@ body {
 
 .card {
   width: 100%;
+  /* 允许网格中的卡片在窄屏缩小，避免被内部控件撑出屏幕。 */
+  min-width: 0;
   /* 【可以试着改 1】中央卡片的宽度，展开抽屉时也保持这个值。 */
-  max-width: 520px;
+  max-width: 640px;
   padding: 36px 28px;
   text-align: center;
   background: #fffef9;
@@ -49,7 +51,7 @@ h1 {
   text-align: center;
   position: relative;
   /* 【图片可改 1】整个展示区域的高度。 */
-  height: 440px;
+  height: 560px;
   margin-top: 0;
   overflow: hidden;
   background: #eaf0e7;
@@ -74,10 +76,11 @@ h1 {
 
 /* ===== 修改：显示已经抠掉背景的视频，动作来自视频本身 ===== */
 .avatar {
-  width: calc(100% - 32px);
-  /* 【图片可改 2】人物显示区域的高度，图片会按比例放进这里。 */
-  height: 380px;
-  margin: 12px auto 0;
+  /* 左右各留 8px，让人物更贴近展示框边缘。 */
+  width: calc(100% - 16px);
+  /* 展示框高度减去 44px，留给顶部状态与间距；框变高，人物也跟着变大。 */
+  height: calc(100% - 44px);
+  margin: 8px auto 0;
   /* 删除原来的整张图片上下浮动，避免与视频中的真实动作叠加。 */
 }
 
@@ -107,6 +110,9 @@ h1 {
   min-width: 0;
   text-align: left;
 }
+
+.asset-message { margin: 8px 0 0; color: #607268; font-size: 12px; line-height: 1.6; }
+.asset-message:empty { display: none; }
 
 /* ===== 修改：把记录面板固定到整个页面的右边缘 ===== */
 .history-panel {
@@ -224,6 +230,17 @@ h1 {
 .chat-message.stopped .message-state { color: #607268; }
 
 .composer { margin-top: 14px; }
+
+.spoken-caption { margin-top: 10px; padding-top: 10px; border-top: 1px solid #dce5d9; }
+.spoken-caption > span { font-size: 11px; color: #607268; }
+.spoken-caption p { margin: 4px 0 0; line-height: 1.7; font-size: 14px; overflow-wrap: anywhere; }
+.speech-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.speech-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; }
+.speech-toggle input { flex: none; width: 16px; height: 16px; margin: 0; accent-color: #354f43; }
+.voice-label { font-size: 12px; color: #607268; }
+.speech-button { padding: 8px 10px; font-size: 12px; }
+.speech-status { margin: 0 0 12px; color: #607268; font-size: 12px; line-height: 1.6; }
+.speech-controls button[hidden], .spoken-caption[hidden] { display: none; }
 
 /* ===== 新增：模型开关，真正的开关是 HTML 中的 checkbox ===== */
 .model-controls { margin-bottom: 14px; }
@@ -368,12 +385,24 @@ input:focus-visible, button:focus-visible {
   font-size: 11px;
 }
 
+.latency-panel { margin: 8px 0 14px; font-size: 12px; color: #607268; }
+.test-controls { margin: 12px 0; font-size: 13px; color: #365346; }
+.test-controls label { display: flex; gap: 8px; align-items: center; }
+.test-controls input { flex: none; width: 16px; height: 16px; padding: 0; margin: 0; accent-color: #354f43; }
+.test-tools { margin: 10px 0 16px; padding: 12px; border: 1px solid #dfe5dd; border-radius: 12px; font-size: 12px; color: #607268; }
+.test-tools summary { cursor: pointer; }
+.test-case-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.test-tools p { line-height: 1.7; margin: 8px 0 0; overflow-wrap: anywhere; }
+.test-message { border-inline-start: 3px solid #91aa96; }
+.latency-panel summary { cursor: pointer; }
+.latency-panel p { margin: 6px 0; line-height: 1.7; overflow-wrap: anywhere; }
+
 /* 小屏幕只调整中央卡片；抽屉仍固定在页面右侧，不切回卡片内部。 */
 @media (max-width: 680px) {
   body { padding: 16px; }
   .card { padding: 28px 20px; }
-  .stage { height: 360px; }
-  .avatar { height: 300px; margin-top: 8px; }
+  /* 窄屏随屏幕宽度调整高度，最小 300px、最大 440px，避免人物框过长。 */
+  .stage { height: clamp(300px, 105vw, 440px); }
 }
 
 /* 用户在系统中选择减少动画时，尊重这个设置。 */
